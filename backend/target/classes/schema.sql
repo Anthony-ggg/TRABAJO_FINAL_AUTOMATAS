@@ -1,0 +1,27 @@
+CREATE TABLE IF NOT EXISTS tablas (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS columnas (
+    id SERIAL PRIMARY KEY,
+    tabla_id INTEGER REFERENCES tablas(id) ON DELETE CASCADE,
+    nombre VARCHAR(100) NOT NULL,
+    tipo VARCHAR(50) DEFAULT 'VARCHAR',
+    UNIQUE(tabla_id, nombre)
+);
+
+CREATE TABLE IF NOT EXISTS registros (
+    id SERIAL PRIMARY KEY,
+    tabla_id INTEGER REFERENCES tablas(id) ON DELETE CASCADE,
+    datos JSONB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS compilaciones (
+    id SERIAL PRIMARY KEY,
+    query TEXT NOT NULL,
+    resultado JSONB,
+    exitoso BOOLEAN DEFAULT FALSE,
+    tiempo_total_ms DOUBLE PRECISION,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

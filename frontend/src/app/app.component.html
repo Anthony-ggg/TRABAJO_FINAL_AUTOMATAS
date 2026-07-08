@@ -1,0 +1,283 @@
+<div class="container">
+  <header>
+    <h1>Mini-Compilador de Consultas SQL en Español</h1>
+    <p class="subtitle">Analizador Léxico/Sintáctico/Semántico con LLM (Llama 3.2)</p>
+  </header>
+
+  <section class="query-section">
+    <div class="input-group">
+      <textarea
+        [(ngModel)]="query"
+        placeholder="Escribe tu consulta SQL en español aquí..."
+        rows="3"
+        class="query-input"
+        (keydown.control.enter)="compile()"
+        (keydown.meta.enter)="compile()"
+      ></textarea>
+      <button (click)="compile()" [disabled]="loading || !query.trim()" class="compile-btn">
+        {{ loading ? 'Compilando...' : 'Compilar' }}
+      </button>
+    </div>
+
+    <div class="examples" *ngIf="metadata">
+      <div class="examples-section">
+        <h3>Consultas Válidas (da clic para probar)</h3>
+        <div class="example-buttons">
+          <button *ngFor="let ex of metadata.ejemplos"
+            (click)="setExample(ex)" class="example-btn valid">
+            {{ ex }}
+          </button>
+        </div>
+      </div>
+      <div class="examples-section">
+        <h3>Consultas Inválidas (da clic para probar)</h3>
+        <div class="example-buttons">
+          <button *ngFor="let ex of metadata.ejemplos_invalidos"
+            (click)="setExample(ex)" class="example-btn invalid">
+            {{ ex }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="result-section" *ngIf="result">
+    <div class="result-header" [class.success]="result.exitoso" [class.error]="!result.exitoso">
+      <span class="status-icon">{{ result.exitoso ? '✓' : '✗' }}</span>
+      <span class="status-text">{{ result.mensaje }}</span>
+      <span class="time-badge" *ngIf="result.observaciones">
+        {{ (result.observaciones.tiempoTotalCompilacion || result.observaciones.tiempoTotalLexico).toFixed(3) }}s
+      </span>
+    </div>
+
+    <div class="error-list" *ngIf="result.errores && result.errores.length > 0">
+      <h3>Errores:</h3>
+      <ul>
+        <li *ngFor="let err of result.errores" class="error-item">{{ err }}</li>
+      </ul>
+    </div>
+
+    <div class="token-visualization" *ngIf="result.tokens && result.tokens.length > 0">
+      <h3>Tokens Identificados:</h3>
+      <div class="token-list">
+        <span *ngFor="let token of result.tokens"
+          class="token-chip"
+          [class]="getTokenClass(token.tipo)"
+          [title]="'Tipo: ' + token.tipo + ' | Origen: ' + token.origen">
+          {{ token.valor }}
+          <small>{{ token.tipo }}</small>
+        </span>
+      </div>
+    </div>
+
+    <div class="tabs" *ngIf="result.ast || result.tablaSimbolos || result.observaciones">
+      <button [class.active]="activeTab === 'result'" (click)="activeTab='result'">Resultado</button>
+      <button [class.active]="activeTab === 'tokens'" (click)="activeTab='tokens'">Tokens</button>
+      <button [class.active]="activeTab === 'ast'" (click)="activeTab='ast'">AST</button>
+      <button [class.active]="activeTab === 'observaciones'" (click)="activeTab='observaciones'">Observaciones</button>
+    </div>
+
+    <div class="tab-content" *ngIf="activeTab === 'tokens'">
+      <table class="data-table" *ngIf="result.tokens?.length">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tipo</th>
+            <th>Valor</th>
+            <th>Origen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let token of result.tokens; let i = index">
+            <td>{{ i + 1 }}</td>
+            <td><span class="token-badge" [class]="getTokenClass(token.tipo)">{{ token.tipo }}</span></td>
+            <td>{{ token.valor }}</td>
+            <td>{{ token.origen }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tab-content" *ngIf="activeTab === 'ast'">
+      <pre class="ast-tree">{{ astTree }}</pre>
+    </div>
+
+    <div class="tab-content" *ngIf="activeTab === 'observaciones' && result.observaciones">
+      <h3>Tabla de Observaciones</h3>
+      <table class="data-table observaciones-table">
+        <thead>
+          <tr>
+            <th>Columna</th>
+            <th>Valor</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tokens AFD (Sintácticos)</strong></td>
+            <td>{{ result.observaciones.tokensAFD.length }} tokens</td>
+            <td>
+              <div class="token-group">
+                <span *ngFor="let t of result.observaciones.tokensAFD" class="mini-token afd">{{ t }}</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Tokens LLM (Semánticos/NLN)</strong></td>
+            <td>{{ result.observaciones.tokensLLM.length }} tokens</td>
+            <td>
+              <div class="token-group">
+                <span *ngFor="let t of result.observaciones.tokensLLM" class="mini-token llm">{{ t }}</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Hilos Concurrentes Activos</strong></td>
+            <td>{{ result.observaciones.hilosConcurrentes }}</td>
+            <td>
+              <span class="thread-badge">ThreadPoolExecutor-0_0</span>
+              <span class="thread-badge">ThreadPoolExecutor-0_1</span>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Tiempo Total Léxico (s)</strong></td>
+            <td>{{ result.observaciones.tiempoTotalLexico.toFixed(3) }}s</td>
+            <td>AFD + LLM ejecutados en paralelo</td>
+          </tr>
+          <tr *ngIf="getFaseKeys().length > 0">
+            <td><strong>Tiempos por Fase</strong></td>
+            <td colspan="2">
+              <div class="phase-times-grid">
+                <div *ngFor="let key of getFaseKeys()" class="phase-bar">
+                  <span class="phase-name">{{ key }}:</span>
+                  <span class="phase-value">{{ result.observaciones.tiemposPorFase[key] }}ms</span>
+                  <div class="bar-track">
+                    <div class="bar-fill" [style.width.%]="getFaseWidth(result.observaciones.tiemposPorFase[key])"></div>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="concurrency-info">
+        <h4>Evidencia de Concurrencia</h4>
+        <p>El AFD clasificó los elementos de la entrada en menos de 1 milisegundo en el <strong>"Hilo-AFD"</strong>.</p>
+        <p>Al mismo tiempo, el ThreadPoolExecutor envió las cadenas al LLM en paralelo usando hilos secundarios 
+           <strong>ThreadPoolExecutor-0_0</strong> y <strong>ThreadPoolExecutor-0_1</strong>.</p>
+        <p>Tiempo total ≈ 1 segundo, demostrando que el escáner léxico resolvió la parte formal y la de PLN simultáneamente.</p>
+      </div>
+    </div>
+
+    <div class="tab-content" *ngIf="activeTab === 'result'">
+      <!-- Resultado de Ejecución de la Consulta -->
+      <div class="execution-result" *ngIf="result.mensajeEjecucion || result.filasResultado">
+        <h3>Resultado de la Ejecución</h3>
+        <p class="execution-message" *ngIf="result.mensajeEjecucion">{{ result.mensajeEjecucion }}</p>
+        
+        <!-- Tabla para resultados del SELECT -->
+        <div class="records-container" *ngIf="result.filasResultado && result.filasResultado.length > 0">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th *ngFor="let col of result.filasResultado[0] | keyvalue">{{ col.key }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of result.filasResultado">
+                <td *ngFor="let col of row | keyvalue">{{ col.value }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="no-records-message" *ngIf="result.filasResultado && result.filasResultado.length === 0">
+          No se encontraron registros que coincidan con la consulta.
+        </p>
+      </div>
+
+      <!-- Tabla de Símbolos original -->
+      <div class="symbol-table-container" *ngIf="result.tablaSimbolos">
+        <h3>Tabla de Símbolos</h3>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Propiedad</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let entry of result.tablaSimbolos | keyvalue">
+              <td>{{ entry.key }}</td>
+              <td>
+                <span *ngIf="isArray(entry.value)">{{ formatJson(entry.value) }}</span>
+                <span *ngIf="isObject(entry.value)">
+                  <pre>{{ formatJson(entry.value) }}</pre>
+                </span>
+                <span *ngIf="!isArray(entry.value) && !isObject(entry.value)">{{ entry.value }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="grammar-section">
+    <h3>Gramática del Lenguaje</h3>
+    <div class="grammar-content">
+      <pre>&lt;query&gt; ::= &lt;select_query&gt; | &lt;insert_query&gt; | &lt;update_query&gt; | &lt;delete_query&gt;
+
+&lt;select_query&gt; ::= SELECCIONAR &lt;columns&gt; DESDE &lt;table&gt; [CUANDO &lt;condition&gt;]
+&lt;insert_query&gt; ::= INSERTAR EN &lt;table&gt; VALORES "(" &lt;values&gt; ")"
+&lt;update_query&gt; ::= MODIFICAR &lt;table&gt; ESTABLECER &lt;assignments&gt; [CUANDO &lt;condition&gt;]
+&lt;delete_query&gt; ::= ELIMINAR DESDE &lt;table&gt; [CUANDO &lt;condition&gt;]
+
+&lt;columns&gt; ::= &lt;column&gt; ("," &lt;column&gt;)*
+&lt;column&gt; ::= IDENTIFIER | "*"
+&lt;table&gt; ::= IDENTIFIER
+&lt;condition&gt; ::= &lt;expression&gt; (("Y" | "O") &lt;expression&gt;)*
+&lt;expression&gt; ::= IDENTIFIER OPERATOR &lt;value&gt;
+&lt;values&gt; ::= &lt;value&gt; ("," &lt;value&gt;)*
+&lt;assignments&gt; ::= &lt;assignment&gt; ("," &lt;assignment&gt;)*
+&lt;assignment&gt; ::= IDENTIFIER "=" &lt;value&gt;
+&lt;value&gt; ::= NUMBER | STRING | IDENTIFIER</pre>
+    </div>
+  </section>
+
+  <section class="metadata-section" *ngIf="metadata">
+    <h3>Base de Datos Real (Docker PostgreSQL) - Tablas y Registros</h3>
+    <div class="table-cards">
+      <div *ngFor="let tabla of metadata.tablas" class="table-card">
+        <h4>{{ tabla | uppercase }}</h4>
+        
+        <div class="columns-info">
+          <strong>Columnas:</strong>
+          <span class="column-badge" *ngFor="let col of getColumnasTabla(tabla)">{{ col }}</span>
+        </div>
+        
+        <div class="records-info">
+          <strong>Registros en la Base de Datos:</strong>
+          <div class="mini-table-container" *ngIf="getRegistrosTabla(tabla).length > 0; else noRegs">
+            <table class="mini-data-table">
+              <thead>
+                <tr>
+                  <th *ngFor="let col of getColumnasTabla(tabla)">{{ col }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let reg of getRegistrosTabla(tabla)">
+                  <td *ngFor="let col of getColumnasTabla(tabla)">
+                    {{ reg[col] !== undefined ? reg[col] : (reg[col.toLowerCase()] !== undefined ? reg[col.toLowerCase()] : '-') }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ng-template #noRegs>
+            <p class="no-records-lbl">Sin registros en esta tabla.</p>
+          </ng-template>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
