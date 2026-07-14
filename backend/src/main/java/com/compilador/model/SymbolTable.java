@@ -28,6 +28,16 @@ public class SymbolTable {
         return tablas.get(tabla.toLowerCase());
     }
 
+    /** Metadata de una columna concreta (nombre y tipo), o null si no existe. */
+    public ColumnaInfo getColumnaInfo(String tabla, String columna) {
+        List<ColumnaInfo> cols = tablas.get(tabla.toLowerCase());
+        if (cols == null) return null;
+        return cols.stream()
+                .filter(c -> c.getNombre().equalsIgnoreCase(columna))
+                .findFirst()
+                .orElse(null);
+    }
+
     public List<String> getTablasDisponibles() {
         return new ArrayList<>(tablas.keySet());
     }

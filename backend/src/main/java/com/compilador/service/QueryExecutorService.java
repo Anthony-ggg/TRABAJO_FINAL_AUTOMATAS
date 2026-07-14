@@ -29,10 +29,14 @@ public class QueryExecutorService {
                 default -> result.setMensajeEjecucion("Tipo de consulta no ejecutable: " + ast.getTipo());
             }
         } catch (Exception e) {
+            // Ninguna excepcion de la base de datos debe escapar cruda al usuario.
             result.setExitoso(false);
-            result.getErrores().add("Error de ejecución: " + e.getMessage());
+            result.agregarError(new com.compilador.model.CompileError(
+                    com.compilador.model.CompileError.Fase.EJECUCION, "ERROR_EJECUCION",
+                    "Error al ejecutar la consulta: " + e.getMessage(),
+                    "La consulta era valida pero no pudo ejecutarse contra la base de datos."));
             result.setMensajeEjecucion("Error al ejecutar la consulta: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("[Ejecucion] " + e.getMessage());
         }
     }
 
@@ -43,12 +47,14 @@ public class QueryExecutorService {
 
         List<String> columnas = extractColumnNames(ast);
         boolean selectAll = columnas.contains("*");
-        String colsSql = selectAll ? "*" : String.join(", ", columnas);
+        String colsSql = selectAll
+                ? "*"
+                : columnas.stream().map(this::identificadorSeguro).collect(java.util.stream.Collectors.joining(", "));
 
         List<ASTNode> conditionNodes = findConditionNodes(ast);
         WhereClause where = buildWhereClause(conditionNodes);
 
-        String sql = "SELECT " + colsSql + " FROM " + tabla + where.sql();
+        String sql = "SELECT " + colsSql + " FROM " + identificadorSeguro(tabla) + where.sql();
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -75,9 +81,11 @@ public class QueryExecutorService {
                     + ") no coincide con el número de columnas de la tabla (" + columnas.size() + ")");
         }
 
-        String colsSql = String.join(", ", columnas);
+        String colsSql = columnas.stream().map(this::identificadorSeguro)
+                .collect(java.util.stream.Collectors.joining(", "));
         String placeholders = String.join(", ", Collections.nCopies(columnas.size(), "?"));
-        String sql = "INSERT INTO " + tabla + " (" + colsSql + ") VALUES (" + placeholders + ")";
+        String sql = "INSERT INTO " + identificadorSeguro(tabla)
+                + " (" + colsSql + ") VALUES (" + placeholders + ")";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -96,18 +104,31 @@ public class QueryExecutorService {
         if (!tableExists(tabla)) throw new IllegalArgumentException("La tabla '" + tabla + "' no existe");
 
         Map<String, String> asignaciones = extractAsignaciones(ast);
+        if (asignaciones.isEmpty()) {
+            throw new IllegalArgumentException("No se indico ninguna asignacion en la clausula ESTABLECER");
+        }
+
         List<ASTNode> conditionNodes = findConditionNodes(ast);
         WhereClause where = buildWhereClause(conditionNodes);
+
+        // Defensa en profundidad: el analizador semantico ya bloquea las operaciones sin
+        // CUANDO, pero un UPDATE sin WHERE reescribiria la tabla entera. Nunca se ejecuta.
+        if (where.sql().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Operacion bloqueada: un MODIFICAR sin clausula CUANDO afectaria a todos los registros de '"
+                            + tabla + "'");
+        }
 
         List<Object> allParams = new ArrayList<>();
         List<String> setClauses = new ArrayList<>();
         for (Map.Entry<String, String> a : asignaciones.entrySet()) {
-            setClauses.add(a.getKey() + " = ?");
+            setClauses.add(identificadorSeguro(a.getKey()) + " = ?");
             allParams.add(parseLiteral(a.getValue()));
         }
         allParams.addAll(where.params());
 
-        String sql = "UPDATE " + tabla + " SET " + String.join(", ", setClauses) + where.sql();
+        String sql = "UPDATE " + identificadorSeguro(tabla) + " SET "
+                + String.join(", ", setClauses) + where.sql();
         int updated;
 
         try (Connection conn = dataSource.getConnection();
@@ -128,6 +149,14 @@ public class QueryExecutorService {
 
         List<ASTNode> conditionNodes = findConditionNodes(ast);
         WhereClause where = buildWhereClause(conditionNodes);
+
+        // Defensa en profundidad: un DELETE sin WHERE vaciaria la tabla. Nunca se ejecuta.
+        if (where.sql().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Operacion bloqueada: un ELIMINAR sin clausula CUANDO borraria todos los registros de '"
+                            + tabla + "'");
+        }
+
         String sql = "DELETE FROM " + tabla + where.sql();
         int deleted;
 
@@ -152,8 +181,9 @@ public class QueryExecutorService {
 
         try (Connection conn = dataSource.getConnection()) {
             for (String tabla : tablas) {
+                String real = nombreRealTabla(tabla);
                 List<String> cols = new ArrayList<>();
-                try (ResultSet rs = conn.getMetaData().getColumns(null, null, tabla, null)) {
+                try (ResultSet rs = conn.getMetaData().getColumns(null, null, real != null ? real : tabla, null)) {
                     while (rs.next()) cols.add(rs.getString("COLUMN_NAME").toLowerCase());
                 }
                 columnasMap.put(tabla, cols);
@@ -184,23 +214,63 @@ public class QueryExecutorService {
 
     // --- Helpers ---
 
+    /**
+     * H2 guarda los nombres de tabla en mayusculas y PostgreSQL en minusculas, asi que
+     * la busqueda en el catalogo debe probar ambas grafias. Sin esto, el ejecutor daba
+     * "la tabla no existe" bajo el perfil h2 aunque el analisis semantico la hubiera validado.
+     */
     private boolean tableExists(String nombre) throws Exception {
+        return nombreRealTabla(nombre) != null;
+    }
+
+    /** @return el nombre de la tabla tal como lo almacena el motor, o null si no existe. */
+    private String nombreRealTabla(String nombre) throws Exception {
         try (Connection conn = dataSource.getConnection()) {
-            ResultSet rs = conn.getMetaData().getTables(null, null, nombre, null);
-            return rs.next();
+            for (String candidato : List.of(nombre, nombre.toLowerCase(), nombre.toUpperCase())) {
+                try (ResultSet rs = conn.getMetaData().getTables(null, null, candidato, null)) {
+                    if (rs.next()) return rs.getString("TABLE_NAME");
+                }
+            }
         }
+        return null;
     }
 
     private List<String> getInsertColumns(String tabla) throws Exception {
         List<String> cols = new ArrayList<>();
-        try (Connection conn = dataSource.getConnection()) {
-            ResultSet rs = conn.getMetaData().getColumns(null, null, tabla, null);
+        String real = nombreRealTabla(tabla);
+        if (real == null) return cols;
+
+        try (Connection conn = dataSource.getConnection();
+             ResultSet rs = conn.getMetaData().getColumns(null, null, real, null)) {
             while (rs.next()) {
                 String name = rs.getString("COLUMN_NAME").toLowerCase();
                 if (!name.equals("id")) cols.add(name);
             }
         }
         return cols;
+    }
+
+    /**
+     * Ultima barrera antes de concatenar un identificador en SQL.
+     *
+     * Los valores siempre viajan parametrizados (PreparedStatement), pero los nombres de
+     * tabla y columna se concatenan por necesidad. Ya fueron validados contra la metadata
+     * en el analisis semantico; esta comprobacion es defensa en profundidad: si algo se
+     * saltara esa validacion, aqui se detiene antes de tocar la base de datos.
+     */
+    private String identificadorSeguro(String nombre) {
+        if (nombre == null || !nombre.matches("[a-zA-Z_][a-zA-Z0-9_]*")) {
+            throw new IllegalArgumentException("Identificador no valido: '" + nombre + "'");
+        }
+        return nombre;
+    }
+
+    /** Solo se permiten los operadores de comparacion de la gramatica. */
+    private String operadorSeguro(String op) {
+        if (!List.of("=", ">", "<", ">=", "<=", "<>", "!=").contains(op)) {
+            throw new IllegalArgumentException("Operador no valido: '" + op + "'");
+        }
+        return op;
     }
 
     private record WhereClause(String sql, List<Object> params) {}
@@ -218,8 +288,8 @@ public class QueryExecutorService {
                     && children.get(i).getTipo().equals("IDENTIFICADOR")
                     && children.get(i + 1).getTipo().equals("OPERADOR")) {
 
-                String col = children.get(i).getValor();
-                String op = children.get(i + 1).getValor();
+                String col = identificadorSeguro(children.get(i).getValor());
+                String op = operadorSeguro(children.get(i + 1).getValor());
                 String valStr = children.get(i + 2).getValor();
 
                 fragments.add(col + " " + op + " ?");

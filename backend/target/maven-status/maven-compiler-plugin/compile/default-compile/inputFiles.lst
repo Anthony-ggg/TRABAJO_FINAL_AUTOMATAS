@@ -1,18 +1,22 @@
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/CompiladorApplication.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/ast/ASTBuilder.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/config/OllamaConfig.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/controller/CompilerController.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/lexer/AutomataStrategy.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/lexer/LLMStrategy.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/lexer/LexerContext.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/lexer/LexicalAnalyzer.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/lexer/TokenStrategy.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/model/ASTNode.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/model/CompileResult.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/model/SymbolTable.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/model/Token.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/parser/GrammarDefinition.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/parser/SyntaxAnalyzer.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/semantic/SemanticAnalyzer.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/service/CompilerService.java
-/home/gabriel/Desktop/Proyectos/Automatas/TRABAJO_FINAL_AUTOMATAS/backend/src/main/java/com/compilador/service/QueryExecutorService.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\CompiladorApplication.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\config\OllamaConfig.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\controller\CompilerController.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\lexer\AutomataStrategy.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\lexer\LexerContext.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\lexer\LexicalAnalyzer.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\lexer\LLMStrategy.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\lexer\TokenStrategy.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\model\ASTNode.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\model\CompileError.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\model\CompileResult.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\model\SymbolTable.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\model\Token.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\parser\AstValidator.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\parser\GrammarDefinition.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\parser\LLMAstGenerator.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\parser\RecursiveDescentParser.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\parser\SyntaxAnalyzer.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\semantic\SemanticAnalyzer.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\service\CompilerService.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\service\ErrorAssistantService.java
+C:\Users\PC\Documents\Aprendizaje UNL\6 Ciclo de Computacion\Teoria de Automatas y Computabilidad Avanzada\Codigos_Automatas\Unidad_3\TFA_U3\TRABAJO_FINAL_AUTOMATAS-develop\backend\src\main\java\com\compilador\service\QueryExecutorService.java

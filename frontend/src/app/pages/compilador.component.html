@@ -1,0 +1,200 @@
+<div class="contenido">
+
+  <!-- Editor de consulta -->
+  <section class="tarjeta editor">
+    <h3>
+      <app-icon name="terminal" [size]="18" />
+      Escribe tu consulta
+    </h3>
+
+    <textarea
+      [(ngModel)]="query"
+      class="entrada"
+      rows="3"
+      spellcheck="false"
+      placeholder="Por ejemplo: SELECCIONAR nombre, edad DESDE usuarios CUANDO edad > 18"
+      (keydown.control.enter)="compilar()"
+      (keydown.meta.enter)="compilar()"></textarea>
+
+    <div class="acciones">
+      <button class="btn-primario" (click)="compilar()" [disabled]="compilando() || !query.trim()">
+        <app-icon name="play" [size]="16" />
+        {{ compilando() ? 'Compilando...' : 'Compilar' }}
+      </button>
+
+      <button class="btn-secundario" (click)="limpiar()" [disabled]="!query">
+        <app-icon name="trash" [size]="16" />
+        Limpiar
+      </button>
+
+      <span class="atajo">Ctrl + Enter para compilar</span>
+    </div>
+  </section>
+
+  <!-- Resultado -->
+  <section class="tarjeta" *ngIf="resultado as r">
+    <div class="cabecera-resultado" [class.exito]="r.exitoso" [class.fallo]="!r.exitoso">
+      <app-icon [name]="r.exitoso ? 'check-circle' : 'x-circle'" [size]="20" />
+      <span class="titulo">{{ r.exitoso ? 'Consulta ejecutada correctamente' : r.mensaje }}</span>
+      <span class="tiempo" *ngIf="r.observaciones?.tiempoTotalCompilacion">
+        {{ r.observaciones.tiempoTotalCompilacion.toFixed(2) }}s
+      </span>
+    </div>
+
+    <!-- Caso exitoso -->
+    <ng-container *ngIf="r.exitoso">
+      <p class="mensaje-ejecucion" *ngIf="r.mensajeEjecucion">{{ r.mensajeEjecucion }}</p>
+
+      <div class="tabla-scroll" *ngIf="r.filasResultado?.length">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th *ngFor="let col of columnasResultado">{{ col }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let fila of r.filasResultado">
+              <td *ngFor="let col of columnasResultado">{{ fila[col] }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="sin-datos" *ngIf="r.filasResultado && r.filasResultado.length === 0">
+        Ningun registro coincide con la consulta.
+      </p>
+    </ng-container>
+
+    <!-- Caso con errores -->
+    <ng-container *ngIf="!r.exitoso">
+      <ul class="lista-errores">
+        <li *ngFor="let err of r.errores">
+          <app-icon name="alert-triangle" [size]="15" />
+          <span>{{ err }}</span>
+        </li>
+      </ul>
+    </ng-container>
+  </section>
+
+  <!-- Agente tutor: explica el error ya detectado por el compilador -->
+  <section class="tarjeta tutor" *ngIf="explicando() || explicacion()">
+    <h3>
+      <app-icon name="graduation-cap" [size]="18" />
+      Asistente
+      <span class="etiqueta-origen" *ngIf="explicacion() as e">
+        {{ e.origen === 'LLM' ? 'Generado por el asistente' : 'Guia del compilador' }}
+      </span>
+    </h3>
+
+    <p class="cargando" *ngIf="explicando()">Preparando una explicacion...</p>
+
+    <ng-container *ngIf="explicacion() as e">
+      <p class="explicacion">{{ e.explicacion }}</p>
+
+      <div class="bloque" *ngIf="e.causa">
+        <span class="etiqueta">Por que ocurrio</span>
+        <p>{{ e.causa }}</p>
+      </div>
+
+      <div class="bloque" *ngIf="e.correccion">
+        <span class="etiqueta">Como corregirlo</span>
+        <p>{{ e.correccion }}</p>
+      </div>
+
+      <div class="bloque" *ngIf="e.pasos?.length">
+        <span class="etiqueta">Pasos a seguir</span>
+        <ol class="pasos">
+          <li *ngFor="let paso of e.pasos">{{ paso }}</li>
+        </ol>
+      </div>
+
+      <div class="bloque" *ngIf="e.ejemploCorrecto">
+        <span class="etiqueta">Ejemplo correcto</span>
+        <code class="ejemplo" (click)="usarEjemplo(e.ejemploCorrecto!)" title="Clic para probar esta consulta">
+          {{ e.ejemploCorrecto }}
+        </code>
+      </div>
+    </ng-container>
+  </section>
+
+  <!-- Ejemplos rapidos -->
+  <section class="tarjeta" *ngIf="metadata as m">
+    <h3>
+      <app-icon name="lightbulb" [size]="18" />
+      Ejemplos rapidos
+    </h3>
+
+    <p class="subtitulo">Consultas validas</p>
+    <div class="ejemplos">
+      <button *ngFor="let ej of m.ejemplos" class="ejemplo-btn valido" (click)="usarEjemplo(ej)">
+        {{ ej }}
+      </button>
+    </div>
+
+    <p class="subtitulo">Consultas con errores (para ver como responde el compilador)</p>
+    <div class="ejemplos">
+      <button *ngFor="let ej of m.ejemplos_invalidos" class="ejemplo-btn invalido" (click)="usarEjemplo(ej)">
+        {{ ej }}
+      </button>
+    </div>
+  </section>
+
+  <!-- Historial -->
+  <section class="tarjeta" *ngIf="estado.historial().length">
+    <h3>
+      <app-icon name="clock" [size]="18" />
+      Historial
+      <button class="btn-texto" (click)="estado.limpiarHistorial()">Vaciar</button>
+    </h3>
+
+    <ul class="historial">
+      <li *ngFor="let item of estado.historial()" (click)="usarEjemplo(item.consulta)">
+        <app-icon [name]="item.exitoso ? 'check-circle' : 'x-circle'" [size]="15"
+                  [class.ok]="item.exitoso" [class.ko]="!item.exitoso" />
+        <code>{{ item.consulta }}</code>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Ayuda -->
+  <section class="tarjeta">
+    <h3 class="cabecera-plegable" (click)="mostrarAyuda.set(!mostrarAyuda())">
+      <app-icon name="book-open" [size]="18" />
+      Ayuda
+      <app-icon class="chevron" [class.abierto]="mostrarAyuda()" name="chevron-right" [size]="16" />
+    </h3>
+
+    <div class="ayuda" *ngIf="mostrarAyuda()">
+      <p>El compilador entiende cuatro tipos de consulta escritas en espanol:</p>
+
+      <dl>
+        <dt>SELECCIONAR</dt>
+        <dd><code>SELECCIONAR nombre, edad DESDE usuarios CUANDO edad &gt; 18</code></dd>
+
+        <dt>INSERTAR</dt>
+        <dd><code>INSERTAR EN usuarios VALORES ('Pedro', 28, 'pedro&#64;email.com', 'Sevilla')</code></dd>
+
+        <dt>MODIFICAR</dt>
+        <dd><code>MODIFICAR usuarios ESTABLECER ciudad = 'Madrid' CUANDO id = 1</code></dd>
+
+        <dt>ELIMINAR</dt>
+        <dd><code>ELIMINAR DESDE usuarios CUANDO edad &lt; 18</code></dd>
+      </dl>
+
+      <p class="nota">
+        <app-icon name="shield" [size]="15" />
+        Por seguridad, MODIFICAR y ELIMINAR exigen una clausula CUANDO: sin ella afectarian
+        a todos los registros de la tabla.
+      </p>
+
+      <div class="tablas-ayuda" *ngIf="metadata as m">
+        <p class="subtitulo">Tablas disponibles</p>
+        <div class="tabla-info" *ngFor="let t of m.tablas">
+          <strong>{{ t }}</strong>
+          <span class="columna" *ngFor="let c of m.columnas[t]">{{ c }}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>

@@ -1,17 +1,29 @@
 package com.compilador.service;
 
 import com.compilador.lexer.LexicalAnalyzer;
-import com.compilador.model.*;
+import com.compilador.model.CompileError;
+import com.compilador.model.CompileResult;
+import com.compilador.model.Token;
 import com.compilador.parser.SyntaxAnalyzer;
 import com.compilador.parser.SyntaxAnalyzer.SyntaxResult;
 import com.compilador.semantic.SemanticAnalyzer;
 import com.compilador.semantic.SemanticAnalyzer.SemanticResult;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.List;
 
+/**
+ * Orquestador de las fases del compilador.
+ *
+ * Cada fase es una barrera: si falla, la compilacion se detiene con errores controlados
+ * y no se llega jamas a la base de datos. Ninguna excepcion escapa sin traducirse a un
+ * CompileError, de modo que el sistema no colapsa ante ninguna entrada.
+ */
 @Service
 public class CompilerService {
+
+    /** Limite de longitud: evita que una entrada desmesurada sature al LLM o a la BD. */
+    private static final int MAX_LONGITUD_CONSULTA = 1000;
 
     private final LexicalAnalyzer lexicalAnalyzer;
     private final SyntaxAnalyzer syntaxAnalyzer;
@@ -29,90 +41,103 @@ public class CompilerService {
     }
 
     public CompileResult compile(String query) {
-        long startTotal = System.nanoTime();
+        long inicioTotal = System.nanoTime();
         CompileResult result = new CompileResult();
         result.setFraseOriginal(query);
-        result.setErrores(new ArrayList<>());
-
-        List<Token> tokens = new ArrayList<>();
 
         try {
-            // 1. Lexical Analysis (concurrent AFD + LLM)
-            System.out.println("\n=== INICIANDO ANÁLISIS LÉXICO ===");
-            System.out.println("Query: " + query);
-            CompileResult.Observaciones obs = lexicalAnalyzer.analyze(query, tokens);
-            result.setTokens(tokens);
-            result.setObservaciones(obs);
+            // --- Validacion de la entrada ---
+            if (query == null || query.isBlank()) {
+                result.setExitoso(false);
+                result.setMensaje("Consulta vacia");
+                result.agregarError(new CompileError(CompileError.Fase.LEXICO, "CONSULTA_VACIA",
+                        "No se proporciono ninguna consulta.",
+                        "Escribe una consulta, por ejemplo: SELECCIONAR * DESDE usuarios"));
+                return result;
+            }
 
-            System.out.println("Tokens generados: " + tokens.size());
-            tokens.forEach(t -> System.out.println("  " + t));
+            if (query.length() > MAX_LONGITUD_CONSULTA) {
+                result.setExitoso(false);
+                result.setMensaje("Consulta demasiado larga");
+                result.agregarError(new CompileError(CompileError.Fase.LEXICO, "CONSULTA_DEMASIADO_LARGA",
+                        "La consulta supera el limite de " + MAX_LONGITUD_CONSULTA + " caracteres.",
+                        "Acorta la consulta."));
+                return result;
+            }
+
+            // --- 1. Analisis lexico (LLM extrae, AFD verifica) ---
+            LexicalAnalyzer.ResultadoLexico lexico = lexicalAnalyzer.analyze(query);
+            List<Token> tokens = lexico.tokens();
+            result.setTokens(tokens);
+            result.setObservaciones(lexico.observaciones());
+
+            if (!lexico.errores().isEmpty()) {
+                result.agregarErrores(lexico.errores());
+                result.setExitoso(false);
+                result.setMensaje("Error lexico");
+                return result;
+            }
 
             if (tokens.isEmpty()) {
                 result.setExitoso(false);
-                result.setMensaje("No se pudieron generar tokens");
-                result.getErrores().add("Análisis léxico falló");
+                result.setMensaje("Error lexico");
+                result.agregarError(new CompileError(CompileError.Fase.LEXICO, "SIN_TOKENS",
+                        "No se reconocio ningun token en la consulta.",
+                        "Escribe una consulta valida, por ejemplo: SELECCIONAR * DESDE usuarios"));
                 return result;
             }
 
-            // 2. Syntax Analysis (AST construction + LLM validation)
-            System.out.println("\n=== INICIANDO ANÁLISIS SINTÁCTICO ===");
-            SyntaxResult syntaxResult = syntaxAnalyzer.analyze(tokens);
-            result.setAst(syntaxResult.ast());
+            // --- 2. Analisis sintactico (codigo valida; el LLM genera el AST) ---
+            SyntaxResult sintactico = syntaxAnalyzer.analyze(tokens, query);
+            result.setAst(sintactico.ast());
+            result.getObservaciones().setOrigenAst(sintactico.origenAst());
+            result.getObservaciones().setMotivoRespaldoAst(sintactico.motivoRespaldo());
+            result.getObservaciones().getTiemposPorFase().put("SINTACTICO", sintactico.tiempoMs());
 
-            System.out.println("AST generado:");
-            if (syntaxResult.ast() != null) {
-                System.out.println(syntaxResult.ast().toString());
-            }
-
-            if (!syntaxResult.valido()) {
+            if (!sintactico.valido()) {
+                result.agregarErrores(sintactico.errores());
                 result.setExitoso(false);
-                result.setMensaje("Error sintáctico");
-                result.getErrores().addAll(syntaxResult.errores());
-                result.getObservaciones().getTiemposPorFase().put("SINTACTICO", syntaxResult.tiempoMs());
+                result.setMensaje("Error sintactico");
                 return result;
             }
 
-            result.getObservaciones().getTiemposPorFase().put("SINTACTICO", syntaxResult.tiempoMs());
+            // --- 3. Analisis semantico (100% codigo, con tabla de simbolos) ---
+            SemanticResult semantico = semanticAnalyzer.validate(sintactico.ast(), tokens);
+            result.setTablaSimbolos(semantico.simbolos());
+            result.getObservaciones().getTiemposPorFase().put("SEMANTICO", semantico.tiempoMs());
 
-            // 3. Semantic Analysis (symbol table + column validation)
-            System.out.println("\n=== INICIANDO ANÁLISIS SEMÁNTICO ===");
-            SemanticResult semanticResult = semanticAnalyzer.validate(syntaxResult.ast(), tokens);
-            result.setTablaSimbolos(semanticResult.simbolos());
-
-            System.out.println("Análisis semántico: " + (semanticResult.valido() ? "VÁLIDO" : "ERRORES"));
-            if (!semanticResult.errores().isEmpty()) {
-                semanticResult.errores().forEach(e -> System.out.println("  Error: " + e));
-            }
-
-            if (!semanticResult.valido()) {
+            if (!semantico.valido()) {
+                result.agregarErrores(semantico.errores());
                 result.setExitoso(false);
-                result.setMensaje("Error semántico");
-                result.getErrores().addAll(semanticResult.errores());
-                result.getObservaciones().getTiemposPorFase().put("SEMANTICO", semanticResult.tiempoMs());
+                result.setMensaje("Error semantico");
                 return result;
             }
 
-            result.getObservaciones().getTiemposPorFase().put("SEMANTICO", semanticResult.tiempoMs());
+            // --- 4. Ejecucion ---
+            queryExecutorService.execute(sintactico.ast(), result);
 
-            // 3.5 Execute query
-            System.out.println("\n=== EJECUTANDO CONSULTA ===");
-            queryExecutorService.execute(syntaxResult.ast(), result);
+            if (!result.getErroresDetallados().isEmpty()) {
+                result.setExitoso(false);
+                result.setMensaje("Error de ejecucion");
+                return result;
+            }
 
-            // 4. Success
-            long totalElapsed = (System.nanoTime() - startTotal);
             result.setExitoso(true);
-            result.setMensaje("Compilación exitosa");
-            result.getObservaciones().setTiempoTotalCompilacion(totalElapsed / 1_000_000_000.0);
-
-            System.out.println("\n=== COMPILACIÓN EXITOSA ===");
-            System.out.println("Tiempo total: " + String.format("%.3f", totalElapsed / 1_000_000_000.0) + "s");
+            result.setMensaje("Compilacion exitosa");
 
         } catch (Exception e) {
-            System.err.println("Error de compilación: " + e.getMessage());
-            e.printStackTrace();
+            // Red de seguridad: ninguna excepcion inesperada llega cruda al usuario.
+            System.err.println("[Compilador] Error inesperado: " + e.getMessage());
             result.setExitoso(false);
-            result.setMensaje("Error de compilación: " + e.getMessage());
-            result.getErrores().add(e.getMessage());
+            result.setMensaje("Error interno del compilador");
+            result.agregarError(new CompileError(CompileError.Fase.EJECUCION, "ERROR_INTERNO",
+                    "El compilador encontro un error inesperado al procesar la consulta.",
+                    "Revisa la sintaxis de la consulta e intentalo de nuevo."));
+        } finally {
+            if (result.getObservaciones() != null) {
+                result.getObservaciones().setTiempoTotalCompilacion(
+                        (System.nanoTime() - inicioTotal) / 1_000_000_000.0);
+            }
         }
 
         return result;

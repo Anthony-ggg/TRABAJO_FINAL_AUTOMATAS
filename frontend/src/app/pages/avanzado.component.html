@@ -1,0 +1,366 @@
+<div class="contenido">
+
+  <!-- Sin compilacion previa -->
+  <section class="tarjeta vacio" *ngIf="!resultado">
+    <app-icon name="layers" [size]="34" />
+    <h3>Sin datos que analizar</h3>
+    <p>Compila una consulta para ver aqui el detalle tecnico de cada fase.</p>
+    <a routerLink="/compilador" class="btn-primario">
+      <app-icon name="play" [size]="16" />
+      Ir al compilador
+    </a>
+  </section>
+
+  <ng-container *ngIf="resultado as r">
+
+    <!-- Consulta analizada -->
+    <section class="tarjeta consulta-analizada">
+      <span class="etiqueta">Consulta analizada</span>
+      <code>{{ r.fraseOriginal }}</code>
+      <span class="estado" [class.exito]="r.exitoso" [class.fallo]="!r.exitoso">
+        <app-icon [name]="r.exitoso ? 'check-circle' : 'x-circle'" [size]="14" />
+        {{ r.mensaje }}
+      </span>
+    </section>
+
+    <!-- Pestanas -->
+    <nav class="pestanas">
+      <button [class.activa]="pestana() === 'lexico'" (click)="pestana.set('lexico')">
+        <app-icon name="list" [size]="15" /> Analisis lexico
+      </button>
+      <button [class.activa]="pestana() === 'sintactico'" (click)="pestana.set('sintactico')">
+        <app-icon name="git-branch" [size]="15" /> Analisis sintactico
+      </button>
+      <button [class.activa]="pestana() === 'semantico'" (click)="pestana.set('semantico')">
+        <app-icon name="database" [size]="15" /> Analisis semantico
+      </button>
+      <button [class.activa]="pestana() === 'metricas'" (click)="pestana.set('metricas')">
+        <app-icon name="activity" [size]="15" /> Metricas
+      </button>
+      <button [class.activa]="pestana() === 'compilador'" (click)="pestana.set('compilador')">
+        <app-icon name="cpu" [size]="15" /> El compilador
+      </button>
+    </nav>
+
+    <!-- ================= LEXICO ================= -->
+    <ng-container *ngIf="pestana() === 'lexico'">
+
+      <section class="tarjeta">
+        <h3><app-icon name="list" [size]="18" /> Tokens del flujo de compilacion</h3>
+        <p class="nota-fase">
+          Estos son los tokens que realmente alimentan al analizador sintactico. Todos han sido
+          verificados por el AFD. Los marcados <strong>LLM+AFD</strong> fueron reconocidos ademas
+          por el modelo de lenguaje.
+        </p>
+
+        <div class="tokens">
+          <span *ngFor="let t of r.tokens" class="token-chip" [ngClass]="claseToken(t.tipo)"
+                [title]="'Tipo: ' + t.tipo + ' | Posicion: ' + t.posicion + ' | Origen: ' + t.origen">
+            {{ t.valor }}
+            <small>{{ t.tipo }}</small>
+          </span>
+        </div>
+
+        <table class="data-table" *ngIf="r.tokens?.length">
+          <thead>
+            <tr>
+              <th>#</th><th>Tipo</th><th>Valor</th><th>Posicion</th><th>Origen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let t of r.tokens; let i = index">
+              <td>{{ i + 1 }}</td>
+              <td><span class="badge" [ngClass]="claseToken(t.tipo)">{{ t.tipo }}</span></td>
+              <td class="mono">{{ t.valor }}</td>
+              <td class="mono">{{ t.posicion }}</td>
+              <td>
+                <span class="origen" [class.confirmado]="t.origen === 'LLM+AFD'">{{ t.origen }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="tarjeta" *ngIf="r.observaciones as o">
+        <h3><app-icon name="shield" [size]="18" /> Conciliacion LLM / AFD</h3>
+        <p class="nota-fase">
+          El LLM extrae tokens (requisito de la practica) y el AFD los verifica contra la consulta
+          real. Ningun token que el AFD no confirme entra al compilador, de modo que una alucinacion
+          del modelo no puede alterar el resultado.
+        </p>
+
+        <div class="metricas-grid">
+          <div class="metrica">
+            <span class="valor">{{ o.coincidenciaLexica }}%</span>
+            <span class="clave">Coincidencia LLM/AFD</span>
+          </div>
+          <div class="metrica">
+            <span class="valor">{{ o.tokensConfirmados }}</span>
+            <span class="clave">Tokens confirmados por ambos</span>
+          </div>
+          <div class="metrica" [class.alerta]="o.tokensAlucinados.length > 0">
+            <span class="valor">{{ o.tokensAlucinados.length }}</span>
+            <span class="clave">Alucinaciones descartadas</span>
+          </div>
+          <div class="metrica">
+            <span class="valor">{{ o.llmDisponible ? 'Si' : 'No' }}</span>
+            <span class="clave">LLM disponible</span>
+          </div>
+        </div>
+
+        <p class="aviso" *ngIf="!o.llmDisponible">
+          <app-icon name="alert-triangle" [size]="15" />
+          El LLM no respondio. El compilador continuo con el AFD, sin interrumpir el analisis.
+        </p>
+
+        <table class="data-table comparativa">
+          <tbody>
+            <tr>
+              <td><strong>Tokens del AFD</strong></td>
+              <td>
+                <div class="mini-tokens">
+                  <span *ngFor="let t of o.tokensAFD" class="mini-token afd">{{ t }}</span>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Tokens del LLM</strong></td>
+              <td>
+                <div class="mini-tokens" *ngIf="o.tokensLLM?.length; else sinTokensLlm">
+                  <span *ngFor="let t of o.tokensLLM" class="mini-token llm">{{ t }}</span>
+                </div>
+                <ng-template #sinTokensLlm><span class="tenue">Sin respuesta del modelo</span></ng-template>
+              </td>
+            </tr>
+            <tr *ngIf="o.tokensAlucinados?.length">
+              <td><strong>Descartados (no existen en la consulta)</strong></td>
+              <td>
+                <div class="mini-tokens">
+                  <span *ngFor="let t of o.tokensAlucinados" class="mini-token descartado">{{ t }}</span>
+                </div>
+              </td>
+            </tr>
+            <tr *ngIf="o.discrepanciasTipo?.length">
+              <td><strong>Discrepancias de tipo</strong></td>
+              <td>
+                <div class="mini-tokens">
+                  <span *ngFor="let t of o.discrepanciasTipo" class="mini-token discrepancia">{{ t }}</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </ng-container>
+
+    <!-- ================= SINTACTICO ================= -->
+    <ng-container *ngIf="pestana() === 'sintactico'">
+
+      <section class="tarjeta" *ngIf="r.observaciones as o">
+        <h3><app-icon name="git-branch" [size]="18" /> Origen del AST</h3>
+        <p class="nota-fase">
+          El LLM genera el Arbol Sintactico (requisito de la practica) y el codigo lo verifica
+          contra los tokens reales antes de aceptarlo. Si el modelo alucina o no responde, actua
+          el parser descendente recursivo.
+        </p>
+
+        <div class="origen-ast" [class.llm]="o.origenAst === 'LLM'">
+          <app-icon [name]="o.origenAst === 'LLM' ? 'cpu' : 'shield'" [size]="18" />
+          <div>
+            <strong>{{ o.origenAst === 'LLM' ? 'AST generado por el LLM' : 'AST del parser determinista' }}</strong>
+            <p *ngIf="o.motivoRespaldoAst">{{ o.motivoRespaldoAst }}</p>
+            <p *ngIf="!o.motivoRespaldoAst">Verificado correctamente contra los tokens de la consulta.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="tarjeta">
+        <h3><app-icon name="git-branch" [size]="18" /> Arbol Sintactico (AST)</h3>
+        <pre class="arbol">{{ astTexto }}</pre>
+      </section>
+
+      <section class="tarjeta" *ngIf="!r.exitoso && r.erroresDetallados?.length">
+        <h3><app-icon name="alert-triangle" [size]="18" /> Errores detectados</h3>
+        <table class="data-table">
+          <thead>
+            <tr><th>Fase</th><th>Codigo</th><th>Mensaje</th><th>Posicion</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let e of r.erroresDetallados">
+              <td><span class="badge fase">{{ e.fase }}</span></td>
+              <td class="mono">{{ e.codigo }}</td>
+              <td>{{ e.mensaje }}</td>
+              <td class="mono">{{ e.posicion >= 0 ? e.posicion : '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </ng-container>
+
+    <!-- ================= SEMANTICO ================= -->
+    <ng-container *ngIf="pestana() === 'semantico'">
+
+      <section class="tarjeta">
+        <h3><app-icon name="file-text" [size]="18" /> Tabla de Simbolos</h3>
+        <p class="nota-fase">
+          Analisis implementado integramente en codigo. Valida tablas, columnas, tipos y
+          operaciones peligrosas contra la metadata real de la base de datos.
+        </p>
+
+        <table class="data-table" *ngIf="simbolos.length; else sinSimbolos">
+          <thead><tr><th>Propiedad</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let s of simbolos">
+              <td>{{ s.clave }}</td>
+              <td class="mono">{{ s.valor }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <ng-template #sinSimbolos>
+          <p class="tenue">El analisis se detuvo antes de la fase semantica.</p>
+        </ng-template>
+      </section>
+
+      <section class="tarjeta" *ngIf="metadata as m">
+        <h3><app-icon name="database" [size]="18" /> Metadata de la base de datos</h3>
+
+        <div class="tabla-card" *ngFor="let t of m.tablas">
+          <h4>{{ t }}</h4>
+          <div class="columnas">
+            <span class="columna" *ngFor="let c of columnasDe(t)">{{ c }}</span>
+          </div>
+
+          <div class="tabla-scroll" *ngIf="registrosDe(t).length; else sinRegistros">
+            <table class="data-table">
+              <thead>
+                <tr><th *ngFor="let c of columnasDe(t)">{{ c }}</th></tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let reg of registrosDe(t)">
+                  <td *ngFor="let c of columnasDe(t)">{{ reg[c] }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ng-template #sinRegistros><p class="tenue">Sin registros.</p></ng-template>
+        </div>
+      </section>
+    </ng-container>
+
+    <!-- ================= METRICAS ================= -->
+    <ng-container *ngIf="pestana() === 'metricas'">
+      <section class="tarjeta" *ngIf="r.observaciones as o">
+        <h3><app-icon name="timer" [size]="18" /> Tiempos y concurrencia</h3>
+
+        <div class="metricas-grid">
+          <div class="metrica">
+            <span class="valor">{{ o.tiempoTotalCompilacion.toFixed(3) }}s</span>
+            <span class="clave">Compilacion total</span>
+          </div>
+          <div class="metrica">
+            <span class="valor">{{ o.tiempoTotalLexico.toFixed(3) }}s</span>
+            <span class="clave">Analisis lexico</span>
+          </div>
+          <div class="metrica">
+            <span class="valor">{{ o.hilosConcurrentes }}</span>
+            <span class="clave">Hilos concurrentes</span>
+          </div>
+          <div class="metrica">
+            <span class="valor">{{ r.tokens.length }}</span>
+            <span class="clave">Tokens procesados</span>
+          </div>
+        </div>
+
+        <h4 class="subtitulo">Tiempo por fase</h4>
+        <div class="barras">
+          <div class="barra" *ngFor="let f of fases">
+            <span class="barra-nombre">{{ f }}</span>
+            <span class="barra-valor">{{ o.tiemposPorFase[f] }}ms</span>
+            <div class="barra-pista">
+              <div class="barra-relleno" [style.width.%]="anchoFase(o.tiemposPorFase[f])"></div>
+            </div>
+          </div>
+        </div>
+
+        <p class="nota-fase">
+          El AFD y el LLM tokenizan en paralelo mediante un ThreadPoolExecutor de dos hilos.
+          El AFD resuelve la parte formal en menos de un milisegundo; el LLM aporta la
+          tokenizacion por PLN. El tiempo total del lexico equivale al del hilo mas lento,
+          no a la suma de ambos.
+        </p>
+      </section>
+    </ng-container>
+
+    <!-- ================= EL COMPILADOR ================= -->
+    <ng-container *ngIf="pestana() === 'compilador'">
+
+      <section class="tarjeta">
+        <h3><app-icon name="file-text" [size]="18" /> Gramatica del lenguaje</h3>
+        <pre class="gramatica">{{ gramatica }}</pre>
+      </section>
+
+      <section class="tarjeta" *ngIf="automata as a">
+        <h3><app-icon name="cpu" [size]="18" /> Automata Finito Determinista del analizador lexico</h3>
+        <p class="nota-fase">
+          Estado inicial: <code>{{ a.estadoInicial }}</code>. El reconocimiento usa maximal munch:
+          se avanza mientras exista transicion y se emite el token del ultimo estado de aceptacion visitado.
+        </p>
+
+        <h4 class="subtitulo">Tabla de transiciones</h4>
+        <div class="tabla-scroll">
+          <table class="data-table">
+            <thead>
+              <tr><th>Estado</th><th>Token que acepta</th><th>Transiciones</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let e of transicionesPorEstado">
+                <td class="mono">{{ e.estado }}</td>
+                <td>
+                  <span class="badge token-keyword" *ngIf="tokenDeEstado(e.estado) as tok">{{ tok }}</span>
+                  <span class="tenue" *ngIf="!tokenDeEstado(e.estado)">-</span>
+                </td>
+                <td>
+                  <div class="mini-tokens">
+                    <span class="mini-token afd" *ngFor="let t of e.transiciones">
+                      {{ t.simbolo }} &rarr; {{ t.destino }}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4 class="subtitulo">Palabras reservadas</h4>
+        <div class="mini-tokens">
+          <span class="mini-token llm" *ngFor="let p of a.palabrasReservadas">{{ p }}</span>
+        </div>
+      </section>
+
+      <section class="tarjeta">
+        <h3><app-icon name="shield" [size]="18" /> Arquitectura</h3>
+        <ul class="arquitectura">
+          <li>
+            <strong>Lexico</strong>
+            El LLM extrae los tokens mediante PLN y el AFD los verifica contra la consulta real.
+            Solo los tokens confirmados por el automata alimentan al compilador.
+          </li>
+          <li>
+            <strong>Sintactico</strong>
+            El LLM genera el AST en formato JSON y el codigo lo valida contra los tokens antes de
+            aceptarlo. La validez sintactica siempre la decide el parser determinista.
+          </li>
+          <li>
+            <strong>Semantico</strong>
+            Implementado integramente en codigo, sobre la Tabla de Simbolos. No interviene el LLM.
+          </li>
+          <li>
+            <strong>Asistencia</strong>
+            El LLM explica los errores que el compilador ya detecto. Nunca los detecta el mismo.
+          </li>
+        </ul>
+      </section>
+    </ng-container>
+
+  </ng-container>
+</div>
