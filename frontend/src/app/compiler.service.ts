@@ -94,7 +94,7 @@ export interface Automata {
 
 @Injectable({ providedIn: 'root' })
 export class CompilerService {
-  private apiUrl = 'http://localhost:8086/api/compiler';
+  private apiUrl = 'http://localhost:8080/api/compiler';
 
   constructor(private http: HttpClient) {}
 

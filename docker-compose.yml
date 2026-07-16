@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  postgres:
+  compilador-db:
     image: postgres:16
     container_name: compilador-db
     environment:
@@ -12,12 +12,76 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U compilador -d compilador"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+
+  lexico-service:
+    build:
+      context: .
+      dockerfile: services/lexico/Dockerfile
+    container_name: lexico-service
+    ports:
+      - "8081:8081"
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=llama3.2
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  sintactico-service:
+    build:
+      context: .
+      dockerfile: services/sintactico/Dockerfile
+    container_name: sintactico-service
+    ports:
+      - "8082:8082"
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=llama3.2
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  semantico-service:
+    build:
+      context: .
+      dockerfile: services/semantico/Dockerfile
+    container_name: semantico-service
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://compilador-db:5432/compilador
+      - SPRING_DATASOURCE_USERNAME=compilador
+      - SPRING_DATASOURCE_PASSWORD=compilador123
+    depends_on:
+      compilador-db:
+        condition: service_healthy
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    container_name: orchestrator
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://compilador-db:5432/compilador
+      - SPRING_DATASOURCE_USERNAME=compilador
+      - SPRING_DATASOURCE_PASSWORD=compilador123
+      - LEXICO_URL=http://lexico-service:8081
+      - SINTACTICO_URL=http://sintactico-service:8082
+      - SEMANTICO_URL=http://semantico-service:8083
+    depends_on:
+      compilador-db:
+        condition: service_healthy
+      lexico-service:
+        condition: service_started
+      sintactico-service:
+        condition: service_started
+      semantico-service:
+        condition: service_started
 
 volumes:
   postgres_data:
